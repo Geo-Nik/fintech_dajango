@@ -128,47 +128,44 @@ class TableRanges(ABC):
         self.row_col_ranges_dict = row_col_ranges_dict
         self.worksheet = worksheet
 
-    @abstractmethod
-    def _get_auto_ends(self):
-        pass
-
-    @abstractmethod
-    def _get_custom_ends(self):
-        pass
-
-    @abstractmethod
-    def get_range(self):
-        pass
-
-class RowRange(TableRanges):
-    def _get_auto_ends(self):
-        row_auto_ends = {
-                              'min': self.worksheet.min_row,
-                              'max': self.worksheet.max_row,
+    def _get_auto_ends(self, row_col_variable):
+        min_ = f'min_{row_col_variable}'
+        max_ = f'max_{row_col_variable}'
+        auto_ends = {
+                              'min': getattr(self.worksheet, min_),
+                              'max': getattr(self.worksheet, max_),
                               }
-        return row_auto_ends
+        return auto_ends
 
-    def _get_custom_ends(self):
+    def _get_custom_ends(self, row_col_variable):
+        min_ = f'min_{row_col_variable}'
+        max_ = f'max_{row_col_variable}'
         if self.row_col_ranges_dict:
             try:
-                row_custom_ends = {
-                                        'min': self.row_col_ranges_dict["min_row"],
-                                        'max': self.row_col_ranges_dict["max_row"],
+                custom_ends = {
+                                        'min': self.row_col_ranges_dict[min_],
+                                        'max': self.row_col_ranges_dict[max_],
                                         }
             except KeyError as err:
                 logging.warning("KeyError: The key of row_col_ranges_dict "
                                 f"variable is not correct:{err}. "
                                 "Instead custom values was returned automatic "
                                 "values based on current worksheet instead.")
-                row_custom_ends = None
+                custom_ends = None
 
         else:
-            row_custom_ends = None
-        return row_custom_ends
+            custom_ends = None
+        return custom_ends
 
+    @abstractmethod
     def get_range(self):
-        row_auto_ends = self._get_auto_ends()
-        row_custom_ends = self._get_custom_ends()
+        pass
+
+class RowRange(TableRanges):
+    def get_range(self):
+        row_col_variable = 'row'
+        row_auto_ends = self._get_auto_ends(row_col_variable)
+        row_custom_ends = self._get_custom_ends(row_col_variable)
         row = RangeSetter(row_auto_ends, row_custom_ends)
         row_range_dict = row.set_range()
         if row_range_dict:
@@ -176,34 +173,10 @@ class RowRange(TableRanges):
 
 
 class ColRange(TableRanges):
-    def _get_auto_ends(self):
-        col_auto_ends = {
-                              'min': self.worksheet.min_column,
-                              'max': self.worksheet.max_column,
-                              }
-        return col_auto_ends
-
-    def _get_custom_ends(self):
-        if self.row_col_ranges_dict:
-            try:
-                col_custom_ends = {
-                                        'min': self.row_col_ranges_dict["min_col"],
-                                        'max': self.row_col_ranges_dict["max_col"],
-                                        }
-            except KeyError as err:
-                logging.warning("KeyError: The key of row_col_ranges_dict "
-                                f"variable is not correct:{err}. "
-                                "Instead custom values was returned automatic "
-                                "values based on current worksheet instead.")
-                col_custom_ends = None
-
-        else:
-            col_custom_ends = None
-        return col_custom_ends
-
     def get_range(self):
-        col_auto_ends = self._get_auto_ends()
-        col_custom_ends = self._get_custom_ends()
+        row_col_variable = 'column'
+        col_auto_ends = self._get_auto_ends(row_col_variable)
+        col_custom_ends = self._get_custom_ends(row_col_variable)
         col = RangeSetter(col_auto_ends, col_custom_ends)
         col_range_dict = col.set_range()
         if col_range_dict:
