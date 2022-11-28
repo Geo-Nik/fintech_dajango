@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import openpyxl
 import logging
 
@@ -122,31 +123,69 @@ class RangeSetter:
             elif are_ends_of_range_int(self.custum_ends):
                 return self._get_ends_of_range()
 
-
-class TableRanges:
+class TableRanges(ABC):
     def __init__(self, worksheet, row_col_ranges_dict: dict = None):
         self.row_col_ranges_dict = row_col_ranges_dict
         self.worksheet = worksheet
-    
-    def _get_row_col_auto_ends(self):
+
+    @abstractmethod
+    def _get_auto_ends(self):
+        pass
+
+    @abstractmethod
+    def _get_custom_ends(self):
+        pass
+
+    @abstractmethod
+    def get_range(self):
+        pass
+
+class RowRange(TableRanges):
+    def _get_auto_ends(self):
         row_auto_ends = {
                               'min': self.worksheet.min_row,
                               'max': self.worksheet.max_row,
                               }
-        col_auto_ends = {
-                              'min': self.worksheet.min_column,
-                              'max': self.worksheet.max_column,
-                              }
-        return row_auto_ends, col_auto_ends
+        return row_auto_ends
 
-    
-    def _get_row_col_custom_ends(self):
+    def _get_custom_ends(self):
         if self.row_col_ranges_dict:
             try:
                 row_custom_ends = {
                                         'min': self.row_col_ranges_dict["min_row"],
                                         'max': self.row_col_ranges_dict["max_row"],
                                         }
+            except KeyError as err:
+                logging.warning("KeyError: The key of row_col_ranges_dict "
+                                f"variable is not correct:{err}. "
+                                "Instead custom values was returned automatic "
+                                "values based on current worksheet instead.")
+                row_custom_ends = None
+
+        else:
+            row_custom_ends = None
+        return row_custom_ends
+
+    def get_range(self):
+        row_auto_ends = self._get_auto_ends()
+        row_custom_ends = self._get_custom_ends()
+        row = RangeSetter(row_auto_ends, row_custom_ends)
+        row_range_dict = row.set_range()
+        if row_range_dict:
+            return row_range_dict
+
+
+class ColRange(TableRanges):
+    def _get_auto_ends(self):
+        col_auto_ends = {
+                              'min': self.worksheet.min_column,
+                              'max': self.worksheet.max_column,
+                              }
+        return col_auto_ends
+
+    def _get_custom_ends(self):
+        if self.row_col_ranges_dict:
+            try:
                 col_custom_ends = {
                                         'min': self.row_col_ranges_dict["min_col"],
                                         'max': self.row_col_ranges_dict["max_col"],
@@ -156,24 +195,19 @@ class TableRanges:
                                 f"variable is not correct:{err}. "
                                 "Instead custom values was returned automatic "
                                 "values based on current worksheet instead.")
-                row_custom_ends = None
                 col_custom_ends = None
 
         else:
-            row_custom_ends = None
             col_custom_ends = None
-        return row_custom_ends, col_custom_ends
+        return col_custom_ends
 
-
-    def get_ranges(self):
-        row_auto_ends, col_auto_ends = self._get_row_col_auto_ends()
-        row_custom_ends, col_custom_ends = self._get_row_col_custom_ends()
-        row = RangeSetter(row_auto_ends, row_custom_ends)
+    def get_range(self):
+        col_auto_ends = self._get_auto_ends()
+        col_custom_ends = self._get_custom_ends()
         col = RangeSetter(col_auto_ends, col_custom_ends)
-        row_range_dict = row.set_range()
         col_range_dict = col.set_range()
-        if row_range_dict and col_range_dict:
-            return {'row': row_range_dict, 'col': col_range_dict}
+        if col_range_dict:
+            return col_range_dict
 
 
 class TableData:
@@ -186,15 +220,17 @@ class TableData:
         if not worksheet:
             return
 
-        worksheet_ranges_obj = TableRanges(worksheet, self.row_col_ranges_dict)
-        worksheet_ranges = worksheet_ranges_obj.get_ranges()
-        if not worksheet_ranges:
+        worksheet_row_range_obj = RowRange(worksheet, self.row_col_ranges_dict)
+        worksheet_col_range_obj = ColRange(worksheet, self.row_col_ranges_dict)
+        worksheet_row_range = worksheet_row_range_obj.get_range()
+        worksheet_col_range = worksheet_col_range_obj.get_range()
+        if not worksheet_row_range or not worksheet_col_range:
             return
         worksheet_iterator = worksheet.iter_rows(
-            min_row=worksheet_ranges['row']['min'],
-            max_row=worksheet_ranges['row']['max'],
-            min_col=worksheet_ranges['col']['min'],
-            max_col=worksheet_ranges['col']['max'],
+            min_row=worksheet_row_range['min'],
+            max_row=worksheet_row_range['max'],
+            min_col=worksheet_col_range['min'],
+            max_col=worksheet_col_range['max'],
             values_only=True,
         )
 
