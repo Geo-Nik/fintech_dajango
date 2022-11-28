@@ -42,6 +42,11 @@ def is_list_contains(List1, List2):
     else:
         return False
 
+def get_property_name(row_col_variable):
+    min_ = f'min_{row_col_variable}'
+    max_ = f'max_{row_col_variable}'
+    return min_, max_
+
 
 class Work_Book:
     def __init__(self, path):
@@ -123,14 +128,14 @@ class RangeSetter:
             elif are_ends_of_range_int(self.custum_ends):
                 return self._get_ends_of_range()
 
+
 class TableRanges(ABC):
     def __init__(self, worksheet, row_col_ranges_dict: dict = None):
         self.row_col_ranges_dict = row_col_ranges_dict
         self.worksheet = worksheet
 
     def _get_auto_ends(self, row_col_variable):
-        min_ = f'min_{row_col_variable}'
-        max_ = f'max_{row_col_variable}'
+        min_, max_ = get_property_name(row_col_variable)
         auto_ends = {
                               'min': getattr(self.worksheet, min_),
                               'max': getattr(self.worksheet, max_),
@@ -138,8 +143,7 @@ class TableRanges(ABC):
         return auto_ends
 
     def _get_custom_ends(self, row_col_variable):
-        min_ = f'min_{row_col_variable}'
-        max_ = f'max_{row_col_variable}'
+        min_, max_ = get_property_name(row_col_variable)
         if self.row_col_ranges_dict:
             try:
                 custom_ends = {
@@ -157,30 +161,41 @@ class TableRanges(ABC):
             custom_ends = None
         return custom_ends
 
+    
+    def _get_range(self, row_col_variable):
+        auto_ends = self._get_auto_ends(row_col_variable)
+        custom_ends = self._get_custom_ends(row_col_variable)
+        row = RangeSetter(auto_ends, custom_ends)
+        range_dict = row.set_range()
+        if range_dict:
+            return range_dict
+
     @abstractmethod
-    def get_range(self):
+    def min(self):
+        pass
+
+    @abstractmethod
+    def max(self):
         pass
 
 class RowRange(TableRanges):
-    def get_range(self):
-        row_col_variable = 'row'
-        row_auto_ends = self._get_auto_ends(row_col_variable)
-        row_custom_ends = self._get_custom_ends(row_col_variable)
-        row = RangeSetter(row_auto_ends, row_custom_ends)
-        row_range_dict = row.set_range()
-        if row_range_dict:
-            return row_range_dict
+    @property
+    def min(self):
+        return self._get_range('row')['min']
+
+    @property
+    def max(self):
+        return self._get_range('row')['max']
 
 
 class ColRange(TableRanges):
-    def get_range(self):
-        row_col_variable = 'column'
-        col_auto_ends = self._get_auto_ends(row_col_variable)
-        col_custom_ends = self._get_custom_ends(row_col_variable)
-        col = RangeSetter(col_auto_ends, col_custom_ends)
-        col_range_dict = col.set_range()
-        if col_range_dict:
-            return col_range_dict
+    @property
+    def min(self):
+        return self._get_range('column')['min']
+
+    @property
+    def max(self):
+        return self._get_range('column')['max']
 
 
 class TableData:
@@ -195,15 +210,11 @@ class TableData:
 
         worksheet_row_range_obj = RowRange(worksheet, self.row_col_ranges_dict)
         worksheet_col_range_obj = ColRange(worksheet, self.row_col_ranges_dict)
-        worksheet_row_range = worksheet_row_range_obj.get_range()
-        worksheet_col_range = worksheet_col_range_obj.get_range()
-        if not worksheet_row_range or not worksheet_col_range:
-            return
         worksheet_iterator = worksheet.iter_rows(
-            min_row=worksheet_row_range['min'],
-            max_row=worksheet_row_range['max'],
-            min_col=worksheet_col_range['min'],
-            max_col=worksheet_col_range['max'],
+            min_row=worksheet_row_range_obj.min,
+            max_row=worksheet_row_range_obj.max,
+            min_col=worksheet_col_range_obj.min,
+            max_col=worksheet_col_range_obj.max,
             values_only=True,
         )
 
